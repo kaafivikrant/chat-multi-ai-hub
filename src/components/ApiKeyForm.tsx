@@ -53,7 +53,9 @@ const ApiKeyForm = ({ onSaveApiKey, apiKeyExists }: ApiKeyFormProps) => {
   });
 
   const onSubmit = (data: ApiKeyFormValues) => {
-    onSaveApiKey(data.apiKey);
+    // Trim the API key to remove any accidental whitespace
+    const trimmedKey = data.apiKey.trim();
+    onSaveApiKey(trimmedKey);
     form.reset();
     setIsDialogOpen(false);
   };

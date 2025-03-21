@@ -35,6 +35,7 @@ const ModelSelector = ({
 }: ModelSelectorProps) => {
   const [open, setOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<AIModel | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Find the selected model from the list of models
   useEffect(() => {
@@ -90,11 +91,23 @@ const ModelSelector = ({
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0 shadow-medium border-white/20 dark:border-gray-800/30 backdrop-blur-sm">
         <Command className="bg-transparent">
-          <CommandInput placeholder="Search models..." className="h-9" />
+          <CommandInput 
+            placeholder="Search models..." 
+            className="h-9" 
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+          />
           <CommandList>
             <CommandEmpty>No models found.</CommandEmpty>
             {Object.entries(
               models.reduce<Record<string, AIModel[]>>((acc, model) => {
+                // Check if the model matches search query (case-insensitive)
+                const matchesSearch = searchQuery === "" || 
+                  model.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                  (model.providerName || model.provider).toLowerCase().includes(searchQuery.toLowerCase());
+                
+                if (!matchesSearch) return acc;
+                
                 if (!acc[model.providerName || model.provider]) {
                   acc[model.providerName || model.provider] = [];
                 }
