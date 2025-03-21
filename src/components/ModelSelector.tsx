@@ -167,47 +167,51 @@ const ModelSelector = ({
           />
           <CommandList>
             <CommandEmpty>
-              {debugLog("ModelSelector", "No models found matching search", { query: searchQuery }) || "No models found."}
+              {searchQuery ? "No models found." : "No models available."}
             </CommandEmpty>
-            {groupedModelsList.map(([provider, providerModels]) => (
-              <CommandGroup heading={provider} key={provider}>
-                {debugLog("ModelSelector", `Rendering provider group: ${provider}`, { 
-                  modelCount: providerModels.length,
-                  models: providerModels.map(m => m.name)
-                }) || null}
-                {providerModels.map((model) => (
-                  <CommandItem
-                    key={model.id}
-                    value={model.id}
-                    onSelect={() => handleSelectModel(model.id)}
-                    className="flex items-start py-2 gap-2"
-                  >
-                    <div className="flex items-center gap-2 flex-1">
-                      {model.iconUrl && (
-                        <img 
-                          src={model.iconUrl} 
-                          alt={model.provider}
-                          className="w-5 h-5 object-contain opacity-80 mt-0.5"
-                        />
-                      )}
-                      <div className="flex flex-col">
-                        <span className="font-medium">{model.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {model.contextLength && `${Math.round(model.contextLength / 1000)}K ctx`}
-                          {model.pricing?.prompt && ` · ${model.pricing.prompt}`}
-                        </span>
+            {groupedModelsList.map(([provider, providerModels]) => {
+              // Call debugLog here but don't use its return value in JSX
+              debugLog("ModelSelector", `Rendering provider group: ${provider}`, { 
+                modelCount: providerModels.length,
+                models: providerModels.map(m => m.name)
+              });
+              
+              return (
+                <CommandGroup heading={provider} key={provider}>
+                  {providerModels.map((model) => (
+                    <CommandItem
+                      key={model.id}
+                      value={model.id}
+                      onSelect={() => handleSelectModel(model.id)}
+                      className="flex items-start py-2 gap-2"
+                    >
+                      <div className="flex items-center gap-2 flex-1">
+                        {model.iconUrl && (
+                          <img 
+                            src={model.iconUrl} 
+                            alt={model.provider}
+                            className="w-5 h-5 object-contain opacity-80 mt-0.5"
+                          />
+                        )}
+                        <div className="flex flex-col">
+                          <span className="font-medium">{model.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {model.contextLength && `${Math.round(model.contextLength / 1000)}K ctx`}
+                            {model.pricing?.prompt && ` · ${model.pricing.prompt}`}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                    <Check
-                      className={cn(
-                        "w-4 h-4 mt-1",
-                        selectedModelId === model.id ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ))}
+                      <Check
+                        className={cn(
+                          "w-4 h-4 mt-1",
+                          selectedModelId === model.id ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              );
+            })}
           </CommandList>
         </Command>
       </PopoverContent>

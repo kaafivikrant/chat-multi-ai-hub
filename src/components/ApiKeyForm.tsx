@@ -87,16 +87,12 @@ const ApiKeyForm = ({ onSaveApiKey, apiKeyExists }: ApiKeyFormProps) => {
     setIsDialogOpen(false);
   };
 
-  // Log validation errors
+  // Log validation errors when they occur
   useEffect(() => {
-    const subscription = form.formState.subscribe(state => {
-      if (state.errors.apiKey) {
-        debugError("ApiKeyForm", "API key validation error", state.errors.apiKey);
-      }
-    });
-    
-    return () => subscription.unsubscribe();
-  }, [form.formState]);
+    if (form.formState.errors.apiKey) {
+      debugError("ApiKeyForm", "API key validation error", form.formState.errors.apiKey);
+    }
+  }, [form.formState.errors.apiKey]);
   
   // If user already has an API key
   if (apiKeyExists) {
