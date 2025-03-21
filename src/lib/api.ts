@@ -33,16 +33,36 @@ export interface ChatSession {
   updatedAt: number;
 }
 
+// API key management
+export function getApiKey(): string | null {
+  return localStorage.getItem("openrouter_api_key");
+}
+
+export function setApiKey(apiKey: string): void {
+  localStorage.setItem("openrouter_api_key", apiKey);
+}
+
+export function removeApiKey(): void {
+  localStorage.removeItem("openrouter_api_key");
+}
+
 // OpenRouter API interaction
 const OPENROUTER_API_URL = "https://openrouter.ai/api";
 
 // Function to fetch available models from OpenRouter
 export async function fetchAvailableModels(): Promise<AIModel[]> {
+  const apiKey = getApiKey();
+  
+  if (!apiKey) {
+    console.warn("No API key found for OpenRouter");
+    return [];
+  }
+  
   try {
     const response = await fetch(`${OPENROUTER_API_URL}/v1/models`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY || ""}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
     });
@@ -70,13 +90,26 @@ export async function fetchAvailableModels(): Promise<AIModel[]> {
     }));
   } catch (error) {
     console.error("Error fetching models:", error);
-    toast.error("Failed to fetch AI models. Please try again later.");
+    toast.error("Failed to fetch AI models. Please check your API key.");
     return [];
   }
 }
 
 // Function to send a message to the AI model
 export async function sendMessageToAI(modelId: string, messages: Message[]): Promise<Message> {
+  const apiKey = getApiKey();
+  
+  if (!apiKey) {
+    return {
+      id: `error_${Date.now()}`,
+      role: "assistant",
+      content: "No API key found. Please add your OpenRouter API key in the settings.",
+      modelId: modelId,
+      timestamp: Date.now(),
+      status: "error",
+    };
+  }
+  
   try {
     // Format messages for the API
     const formattedMessages = messages.map(msg => ({
@@ -87,7 +120,7 @@ export async function sendMessageToAI(modelId: string, messages: Message[]): Pro
     const response = await fetch(`${OPENROUTER_API_URL}/v1/chat/completions`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY || ""}`,
+        Authorization: `Bearer ${apiKey}`,
         "HTTP-Referer": window.location.origin,
         "X-Title": "Multi-AI Chat Hub",
         "Content-Type": "application/json",

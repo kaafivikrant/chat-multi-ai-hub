@@ -4,12 +4,16 @@ import { useChat } from "@/context/ChatContext";
 import ChatMessage from "@/components/ChatMessage";
 import ChatInput from "@/components/ChatInput";
 import ModelSelector from "@/components/ModelSelector";
+import ApiKeyForm from "@/components/ApiKeyForm";
 import GlassMorphicCard from "@/components/ui-custom/GlassMorphicCard";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Plus, Loader2 } from "lucide-react";
 
 const Index = () => {
   const { 
+    apiKey,
+    setUserApiKey,
+    hasApiKey,
     availableModels, 
     selectedModelId, 
     isLoadingModels, 
@@ -31,6 +35,41 @@ const Index = () => {
     }
   }, [messages]);
 
+  // If no API key is set, show the API key form
+  if (!hasApiKey) {
+    return (
+      <div className="flex flex-col min-h-screen bg-gradient-to-br from-background to-accent/40">
+        {/* Subtle background pattern */}
+        <div 
+          className="fixed inset-0 z-0 opacity-20" 
+          style={{
+            backgroundImage: `radial-gradient(circle at 25px 25px, rgba(0, 0, 0, 0.1) 2%, transparent 0%), radial-gradient(circle at 75px 75px, rgba(0, 0, 0, 0.1) 2%, transparent 0%)`,
+            backgroundSize: "100px 100px",
+          }}
+        />
+        
+        {/* Header */}
+        <header className="sticky top-0 z-30 backdrop-blur-md bg-white/50 dark:bg-gray-900/50 border-b border-white/20 dark:border-gray-800/30 px-4 py-3 shadow-soft">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <h1 className="font-medium text-lg">Multi-AI Chat Hub</h1>
+            </div>
+          </div>
+        </header>
+        
+        <main className="flex-1 flex items-center justify-center p-4">
+          <div className="w-full max-w-md">
+            <ApiKeyForm 
+              onSaveApiKey={setUserApiKey}
+              apiKeyExists={false}
+            />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-background to-accent/40">
       {/* Subtle background pattern */}
@@ -50,15 +89,22 @@ const Index = () => {
             <h1 className="font-medium text-lg">Multi-AI Chat Hub</h1>
           </div>
           
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="flex items-center gap-1 bg-white/50 dark:bg-gray-900/50 border-white/20 dark:border-gray-800/30"
-            onClick={() => createNewSession().then(id => window.location.href = `/chat/${id}`)}
-          >
-            <Plus className="h-4 w-4" />
-            <span>New Chat</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <ApiKeyForm 
+              onSaveApiKey={setUserApiKey}
+              apiKeyExists={true}
+            />
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="flex items-center gap-1 bg-white/50 dark:bg-gray-900/50 border-white/20 dark:border-gray-800/30"
+              onClick={() => createNewSession().then(id => window.location.href = `/chat/${id}`)}
+            >
+              <Plus className="h-4 w-4" />
+              <span>New Chat</span>
+            </Button>
+          </div>
         </div>
       </header>
       

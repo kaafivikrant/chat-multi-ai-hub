@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { 
   AIModel, 
@@ -10,12 +11,21 @@ import {
   getChatSessionById,
   deleteChatSession,
   getPreferredModel,
-  setPreferredModel
+  setPreferredModel,
+  getApiKey,
+  setApiKey,
+  removeApiKey
 } from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate, useParams } from "react-router-dom";
 
 interface ChatContextType {
+  // API Key
+  apiKey: string | null;
+  setUserApiKey: (key: string) => void;
+  removeUserApiKey: () => void;
+  hasApiKey: boolean;
+  
   // Models
   availableModels: AIModel[];
   selectedModelId: string;
@@ -45,10 +55,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId: string }>();
   
+  // API Key state
+  const [apiKey, setApiKey] = useState<string | null>(getApiKey());
+  
   // Models state
   const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<string>(getPreferredModel() || DEFAULT_MODEL_ID);
-  const [isLoadingModels, setIsLoadingModels] = useState<boolean>(true);
+  const [isLoadingModels, setIsLoadingModels] = useState<boolean>(false);
   
   // Chat sessions state
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
@@ -57,9 +70,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Messages state
   const [messages, setMessages] = useState<Message[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  
+  // Set API key
+  const setUserApiKey = useCallback((key: string) => {
+    setApiKey(key);
+    toast.success("API key saved successfully");
+    
+    // Refresh models immediately after setting the API key
+    refreshModels();
+  }, []);
+  
+  // Remove API key
+  const removeUserApiKey = useCallback(() => {
+    removeApiKey();
+    setApiKey(null);
+    setAvailableModels([]);
+    toast.info("API key removed");
+  }, []);
+
+  // Check if API key exists
+  const hasApiKey = Boolean(apiKey);
 
   // Fetch available models
   const refreshModels = useCallback(async () => {
+    if (!hasApiKey) {
+      setIsLoadingModels(false);
+      return;
+    }
+    
     setIsLoadingModels(true);
     try {
       const models = await fetchAvailableModels();
@@ -86,7 +124,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoadingModels(false);
     }
-  }, [selectedModelId]);
+  }, [selectedModelId, hasApiKey]);
 
   // Select a different model
   const selectModel = useCallback((modelId: string) => {
@@ -170,6 +208,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Send a message to the selected AI model
   const sendMessage = useCallback(async (content: string) => {
+    if (!hasApiKey) {
+      toast.error("Please set your OpenRouter API key first");
+      return;
+    }
+    
     // Create user message
     const userMessage: Message = {
       id: `user_${Date.now()}`,
@@ -281,7 +324,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsProcessing(false);
     }
-  }, [messages, selectedModelId, currentSession, createNewSession]);
+  }, [messages, selectedModelId, currentSession, createNewSession, hasApiKey]);
 
   // Load sessions on initial mount
   useEffect(() => {
@@ -289,17 +332,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setChatSessions(allSessions);
   }, []);
 
-  // Fetch available models on initial mount
+  // Fetch available models on initial mount and when API key changes
   useEffect(() => {
-    refreshModels();
-    
-    // Set up periodic refresh (every 5 minutes)
-    const refreshInterval = setInterval(() => {
+    if (hasApiKey) {
       refreshModels();
-    }, 5 * 60 * 1000);
-    
-    return () => clearInterval(refreshInterval);
-  }, [refreshModels]);
+      
+      // Set up periodic refresh (every 5 minutes)
+      const refreshInterval = setInterval(() => {
+        refreshModels();
+      }, 5 * 60 * 1000);
+      
+      return () => clearInterval(refreshInterval);
+    }
+  }, [refreshModels, hasApiKey]);
 
   // Load session if sessionId is present in URL
   useEffect(() => {
@@ -309,6 +354,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [sessionId, loadSession]);
 
   const contextValue: ChatContextType = {
+    apiKey,
+    setUserApiKey,
+    removeUserApiKey,
+    hasApiKey,
+    
     availableModels,
     selectedModelId,
     isLoadingModels,
