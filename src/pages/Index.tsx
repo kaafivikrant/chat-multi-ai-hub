@@ -8,6 +8,7 @@ import ApiKeyForm from "@/components/ApiKeyForm";
 import GlassMorphicCard from "@/components/ui-custom/GlassMorphicCard";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Plus, Loader2 } from "lucide-react";
+import { debugLog } from "@/lib/debug";
 
 const Index = () => {
   const { 
@@ -28,6 +29,30 @@ const Index = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const selectedModel = getSelectedModel();
 
+  // Log component state
+  useEffect(() => {
+    debugLog("Index", "Component state", {
+      hasApiKey,
+      availableModelsCount: availableModels.length,
+      selectedModelId,
+      isLoadingModels,
+      messagesCount: messages.length
+    });
+  }, [hasApiKey, availableModels.length, selectedModelId, isLoadingModels, messages.length]);
+
+  // Log the models we have available
+  useEffect(() => {
+    if (availableModels.length > 0) {
+      debugLog("Index", "Available models:", availableModels.map(m => ({
+        id: m.id,
+        name: m.name,
+        provider: m.providerName || m.provider
+      })));
+    } else if (!isLoadingModels && hasApiKey) {
+      debugLog("Index", "No models available even though we have an API key");
+    }
+  }, [availableModels, isLoadingModels, hasApiKey]);
+
   // Scroll to bottom when messages change
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -37,6 +62,7 @@ const Index = () => {
 
   // If no API key is set, show the API key form
   if (!hasApiKey) {
+    debugLog("Index", "Rendering API key form (no API key exists)");
     return (
       <div className="flex flex-col min-h-screen bg-gradient-to-br from-background to-accent/40">
         {/* Subtle background pattern */}
@@ -61,7 +87,10 @@ const Index = () => {
         <main className="flex-1 flex items-center justify-center p-4">
           <div className="w-full max-w-md">
             <ApiKeyForm 
-              onSaveApiKey={setUserApiKey}
+              onSaveApiKey={(key) => {
+                debugLog("Index", "API key saved", { keyLength: key.length });
+                setUserApiKey(key);
+              }}
               apiKeyExists={false}
             />
           </div>
@@ -69,6 +98,11 @@ const Index = () => {
       </div>
     );
   }
+
+  debugLog("Index", "Rendering main chat interface", {
+    modelsLoaded: availableModels.length > 0,
+    selectedModel: selectedModel?.name || "None"
+  });
 
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-background to-accent/40">
@@ -91,7 +125,10 @@ const Index = () => {
           
           <div className="flex items-center gap-2">
             <ApiKeyForm 
-              onSaveApiKey={setUserApiKey}
+              onSaveApiKey={(key) => {
+                debugLog("Index", "API key updated", { keyLength: key.length });
+                setUserApiKey(key);
+              }}
               apiKeyExists={true}
             />
             
@@ -99,7 +136,13 @@ const Index = () => {
               variant="outline" 
               size="sm" 
               className="flex items-center gap-1 bg-white/50 dark:bg-gray-900/50 border-white/20 dark:border-gray-800/30"
-              onClick={() => createNewSession().then(id => window.location.href = `/chat/${id}`)}
+              onClick={() => {
+                debugLog("Index", "Creating new chat session");
+                createNewSession().then(id => {
+                  debugLog("Index", "New chat session created", { id });
+                  window.location.href = `/chat/${id}`;
+                });
+              }}
             >
               <Plus className="h-4 w-4" />
               <span>New Chat</span>
@@ -125,14 +168,20 @@ const Index = () => {
                     <ModelSelector
                       models={availableModels}
                       selectedModelId={selectedModelId}
-                      onSelectModel={selectModel}
+                      onSelectModel={(modelId) => {
+                        debugLog("Index", "Model selected from welcome screen", { modelId });
+                        selectModel(modelId);
+                      }}
                       isLoading={isLoadingModels}
                       className="w-full"
                     />
                   </div>
                   
                   <Button 
-                    onClick={() => sendMessage("Hello! Tell me about what makes you unique as an AI model.")}
+                    onClick={() => {
+                      debugLog("Index", "Starting conversation with default message");
+                      sendMessage("Hello! Tell me about what makes you unique as an AI model.");
+                    }}
                     className="w-full"
                     disabled={isLoadingModels || isProcessing}
                   >
@@ -156,7 +205,13 @@ const Index = () => {
                     <ModelSelector
                       models={availableModels}
                       selectedModelId={selectedModelId}
-                      onSelectModel={selectModel}
+                      onSelectModel={(modelId) => {
+                        debugLog("Index", "Model selected during conversation", { 
+                          modelId, 
+                          previousModelId: selectedModelId
+                        });
+                        selectModel(modelId);
+                      }}
                       isLoading={isLoadingModels}
                       className="w-full"
                     />
@@ -185,7 +240,13 @@ const Index = () => {
       <div className="fixed bottom-0 left-0 w-full p-4 z-20">
         <div className="max-w-3xl mx-auto">
           <ChatInput 
-            onSendMessage={sendMessage} 
+            onSendMessage={(content) => {
+              debugLog("Index", "Sending message", { 
+                contentLength: content.length,
+                modelId: selectedModelId
+              });
+              sendMessage(content);
+            }} 
             isProcessing={isProcessing}
             className="animate-slide-up"
           />

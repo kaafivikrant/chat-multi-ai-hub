@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import GlassMorphicCard from "./ui-custom/GlassMorphicCard";
+import { debugLog, debugError } from "@/lib/debug";
 
 // Define the schema for the API key form
 const apiKeySchema = z.object({
@@ -52,14 +53,51 @@ const ApiKeyForm = ({ onSaveApiKey, apiKeyExists }: ApiKeyFormProps) => {
     },
   });
 
+  useEffect(() => {
+    debugLog("ApiKeyForm", "Component mounted", { apiKeyExists });
+  }, [apiKeyExists]);
+
   const onSubmit = (data: ApiKeyFormValues) => {
+    debugLog("ApiKeyForm", "Form submitted", { 
+      keyLength: data.apiKey.length,
+      keyStart: data.apiKey.substring(0, 5) + "..."
+    });
+    
     // Trim the API key to remove any accidental whitespace
     const trimmedKey = data.apiKey.trim();
+    
+    debugLog("ApiKeyForm", "API key trimmed", { 
+      originalLength: data.apiKey.length,
+      trimmedLength: trimmedKey.length,
+      hadWhitespace: data.apiKey.length !== trimmedKey.length
+    });
+    
     onSaveApiKey(trimmedKey);
     form.reset();
     setIsDialogOpen(false);
   };
 
+  const handleOpenDialog = () => {
+    debugLog("ApiKeyForm", "Opening API key dialog");
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    debugLog("ApiKeyForm", "Closing API key dialog");
+    setIsDialogOpen(false);
+  };
+
+  // Log validation errors
+  useEffect(() => {
+    const subscription = form.formState.subscribe(state => {
+      if (state.errors.apiKey) {
+        debugError("ApiKeyForm", "API key validation error", state.errors.apiKey);
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, [form.formState]);
+  
   // If user already has an API key
   if (apiKeyExists) {
     return (
@@ -68,13 +106,13 @@ const ApiKeyForm = ({ onSaveApiKey, apiKeyExists }: ApiKeyFormProps) => {
           variant="outline"
           size="sm"
           className="flex items-center gap-1.5 text-xs py-1 h-8 bg-white/50 dark:bg-gray-900/50 border-white/20 dark:border-gray-800/30"
-          onClick={() => setIsDialogOpen(true)}
+          onClick={handleOpenDialog}
         >
           <KeyRound className="h-3.5 w-3.5" />
           Update API Key
         </Button>
         
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Update your OpenRouter API Key</DialogTitle>
@@ -142,6 +180,13 @@ const ApiKeyForm = ({ onSaveApiKey, apiKeyExists }: ApiKeyFormProps) => {
                     placeholder="sk-or-..." 
                     {...field} 
                     type="password" 
+                    onChange={(e) => {
+                      field.onChange(e);
+                      debugLog("ApiKeyForm", "API key input changed", { 
+                        length: e.target.value.length,
+                        valid: e.target.value.startsWith("sk-") && e.target.value.length >= 8
+                      });
+                    }}
                   />
                 </FormControl>
                 <FormDescription>
@@ -168,6 +213,7 @@ const ApiKeyForm = ({ onSaveApiKey, apiKeyExists }: ApiKeyFormProps) => {
           target="_blank" 
           rel="noopener noreferrer"
           className="text-primary flex items-center justify-center gap-1 hover:underline"
+          onClick={() => debugLog("ApiKeyForm", "OpenRouter keys link clicked")}
         >
           Get your free OpenRouter API key
           <Link className="h-3 w-3" />

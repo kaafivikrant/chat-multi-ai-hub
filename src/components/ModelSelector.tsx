@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/command";
 import { AIModel } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { debugLog } from "@/lib/debug";
 
 interface ModelSelectorProps {
   models: AIModel[];
@@ -37,16 +38,79 @@ const ModelSelector = ({
   const [selectedModel, setSelectedModel] = useState<AIModel | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Log received models
+  useEffect(() => {
+    debugLog("ModelSelector", "Received models", { 
+      count: models.length, 
+      selectedId: selectedModelId,
+      modelIds: models.map(m => m.id)
+    });
+  }, [models, selectedModelId]);
+
   // Find the selected model from the list of models
   useEffect(() => {
     const model = models.find(m => m.id === selectedModelId);
+    debugLog("ModelSelector", "Finding selected model", { 
+      selectedId: selectedModelId, 
+      found: !!model,
+      modelName: model?.name
+    });
     setSelectedModel(model || null);
   }, [selectedModelId, models]);
 
   const handleSelectModel = useCallback((modelId: string) => {
+    debugLog("ModelSelector", "Model selected", { modelId });
     onSelectModel(modelId);
     setOpen(false);
   }, [onSelectModel]);
+
+  // Log what we're filtering in search
+  useEffect(() => {
+    if (searchQuery) {
+      debugLog("ModelSelector", "Filtering models by search query", { 
+        query: searchQuery,
+        modelCount: models.length
+      });
+    }
+  }, [searchQuery, models]);
+
+  // Group models by provider
+  const groupedModels = useCallback(() => {
+    debugLog("ModelSelector", "Grouping models by provider");
+    
+    return Object.entries(
+      models.reduce<Record<string, AIModel[]>>((acc, model) => {
+        // Check if the model matches search query (case-insensitive)
+        const matchesSearch = searchQuery === "" || 
+          model.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+          (model.providerName || model.provider).toLowerCase().includes(searchQuery.toLowerCase());
+        
+        if (!matchesSearch) return acc;
+        
+        if (!acc[model.providerName || model.provider]) {
+          acc[model.providerName || model.provider] = [];
+        }
+        acc[model.providerName || model.provider].push(model);
+        return acc;
+      }, {})
+    );
+  }, [models, searchQuery]);
+
+  const groupedModelsList = groupedModels();
+  
+  // Log the filtered models
+  useEffect(() => {
+    const totalModelsAfterFiltering = groupedModelsList.reduce(
+      (total, [_, models]) => total + models.length, 
+      0
+    );
+    
+    debugLog("ModelSelector", "Models after filtering", { 
+      totalFiltered: totalModelsAfterFiltering,
+      providerGroups: groupedModelsList.length,
+      query: searchQuery || "(empty)"
+    });
+  }, [groupedModelsList, searchQuery]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -63,6 +127,7 @@ const ModelSelector = ({
             className
           )}
           disabled={isLoading}
+          onClick={() => debugLog("ModelSelector", "Popover trigger clicked")}
         >
           {isLoading ? (
             <div className="flex items-center gap-2">
@@ -95,27 +160,21 @@ const ModelSelector = ({
             placeholder="Search models..." 
             className="h-9" 
             value={searchQuery}
-            onValueChange={setSearchQuery}
+            onValueChange={(value) => {
+              debugLog("ModelSelector", "Search query changed", { value });
+              setSearchQuery(value);
+            }}
           />
           <CommandList>
-            <CommandEmpty>No models found.</CommandEmpty>
-            {Object.entries(
-              models.reduce<Record<string, AIModel[]>>((acc, model) => {
-                // Check if the model matches search query (case-insensitive)
-                const matchesSearch = searchQuery === "" || 
-                  model.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                  (model.providerName || model.provider).toLowerCase().includes(searchQuery.toLowerCase());
-                
-                if (!matchesSearch) return acc;
-                
-                if (!acc[model.providerName || model.provider]) {
-                  acc[model.providerName || model.provider] = [];
-                }
-                acc[model.providerName || model.provider].push(model);
-                return acc;
-              }, {})
-            ).map(([provider, providerModels]) => (
+            <CommandEmpty>
+              {debugLog("ModelSelector", "No models found matching search", { query: searchQuery }) || "No models found."}
+            </CommandEmpty>
+            {groupedModelsList.map(([provider, providerModels]) => (
               <CommandGroup heading={provider} key={provider}>
+                {debugLog("ModelSelector", `Rendering provider group: ${provider}`, { 
+                  modelCount: providerModels.length,
+                  models: providerModels.map(m => m.name)
+                }) || null}
                 {providerModels.map((model) => (
                   <CommandItem
                     key={model.id}

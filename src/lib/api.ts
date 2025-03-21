@@ -1,5 +1,6 @@
 
 import { toast } from "sonner";
+import { debugLog, debugError, debugWarn } from "./debug";
 
 export interface AIModel {
   id: string;
@@ -35,14 +36,18 @@ export interface ChatSession {
 
 // API key management
 export function getApiKey(): string | null {
-  return localStorage.getItem("openrouter_api_key");
+  const apiKey = localStorage.getItem("openrouter_api_key");
+  debugLog("API", "Retrieved API key from storage", apiKey ? "API key exists" : "No API key found");
+  return apiKey;
 }
 
 export function setApiKey(apiKey: string): void {
+  debugLog("API", "Setting API key in storage", { keyLength: apiKey.length });
   localStorage.setItem("openrouter_api_key", apiKey);
 }
 
 export function removeApiKey(): void {
+  debugLog("API", "Removing API key from storage");
   localStorage.removeItem("openrouter_api_key");
 }
 
@@ -54,11 +59,13 @@ export async function fetchAvailableModels(): Promise<AIModel[]> {
   const apiKey = getApiKey();
   
   if (!apiKey) {
-    console.warn("No API key found for OpenRouter");
+    debugWarn("API", "No API key found for OpenRouter");
     return [];
   }
   
   try {
+    debugLog("API", "Fetching models from OpenRouter", { apiUrl: `${OPENROUTER_API_URL}/v1/models` });
+    
     const response = await fetch(`${OPENROUTER_API_URL}/v1/models`, {
       method: "GET",
       headers: {
@@ -67,15 +74,22 @@ export async function fetchAvailableModels(): Promise<AIModel[]> {
       },
     });
 
+    debugLog("API", "OpenRouter models response status", { status: response.status, ok: response.ok });
+
     if (!response.ok) {
       const errorData = await response.json();
+      debugError("API", "Failed to fetch models from OpenRouter", errorData);
       throw new Error(`Failed to fetch models: ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
+    debugLog("API", "Successfully fetched models data", { 
+      modelCount: data.data?.length || 0,
+      firstModel: data.data?.length > 0 ? data.data[0].id : null
+    });
     
     // Transform the response into our AIModel format
-    return data.data.map((model: any) => ({
+    const transformedModels = data.data.map((model: any) => ({
       id: model.id,
       name: model.name.split("/").pop().replace(/-/g, " "),
       description: model.description,
@@ -88,7 +102,15 @@ export async function fetchAvailableModels(): Promise<AIModel[]> {
         completion: `$${model.pricing?.completion?.toFixed(6) || "0.000000"}/1K tokens`
       }
     }));
+
+    debugLog("API", "Transformed models data", { 
+      modelCount: transformedModels.length,
+      modelIds: transformedModels.map(m => m.id)
+    });
+    
+    return transformedModels;
   } catch (error) {
+    debugError("API", "Error fetching models from OpenRouter", error);
     console.error("Error fetching models:", error);
     toast.error("Failed to fetch AI models. Please check your API key.");
     return [];
@@ -100,6 +122,7 @@ export async function sendMessageToAI(modelId: string, messages: Message[]): Pro
   const apiKey = getApiKey();
   
   if (!apiKey) {
+    debugWarn("API", "No API key found when sending message to AI");
     return {
       id: `error_${Date.now()}`,
       role: "assistant",
@@ -117,6 +140,12 @@ export async function sendMessageToAI(modelId: string, messages: Message[]): Pro
       content: msg.content
     }));
 
+    debugLog("API", "Sending message to AI", { 
+      modelId, 
+      messageCount: messages.length,
+      endpoint: `${OPENROUTER_API_URL}/v1/chat/completions`
+    });
+
     const response = await fetch(`${OPENROUTER_API_URL}/v1/chat/completions`, {
       method: "POST",
       headers: {
@@ -131,12 +160,20 @@ export async function sendMessageToAI(modelId: string, messages: Message[]): Pro
       }),
     });
 
+    debugLog("API", "AI response status", { status: response.status, ok: response.ok });
+
     if (!response.ok) {
       const errorData = await response.json();
+      debugError("API", "AI response error", errorData);
       throw new Error(`AI response error: ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
+    debugLog("API", "Received AI response", { 
+      responseId: data.id,
+      model: data.model,
+      responseLength: data.choices?.[0]?.message?.content?.length || 0
+    });
 
     return {
       id: data.id || `msg_${Date.now()}`,
@@ -147,6 +184,7 @@ export async function sendMessageToAI(modelId: string, messages: Message[]): Pro
       status: "complete",
     };
   } catch (error) {
+    debugError("API", "Error sending message to AI", error);
     console.error("Error sending message to AI:", error);
     toast.error("Failed to get AI response. Please try again.");
     return {
@@ -163,6 +201,7 @@ export async function sendMessageToAI(modelId: string, messages: Message[]): Pro
 // Store chat session in localStorage
 export function storeChatSession(session: ChatSession): void {
   try {
+    debugLog("Storage", "Storing chat session", { sessionId: session.id, messageCount: session.messages.length });
     const sessions = getChatSessions();
     const existingIndex = sessions.findIndex(s => s.id === session.id);
     
@@ -173,7 +212,9 @@ export function storeChatSession(session: ChatSession): void {
     }
     
     localStorage.setItem("chat_sessions", JSON.stringify(sessions));
+    debugLog("Storage", "Chat session stored successfully", { sessionCount: sessions.length });
   } catch (error) {
+    debugError("Storage", "Error storing chat session", error);
     console.error("Error storing chat session:", error);
     toast.error("Failed to save chat session");
   }
@@ -183,8 +224,11 @@ export function storeChatSession(session: ChatSession): void {
 export function getChatSessions(): ChatSession[] {
   try {
     const sessionsString = localStorage.getItem("chat_sessions");
-    return sessionsString ? JSON.parse(sessionsString) : [];
+    const sessions = sessionsString ? JSON.parse(sessionsString) : [];
+    debugLog("Storage", "Retrieved chat sessions", { sessionCount: sessions.length });
+    return sessions;
   } catch (error) {
+    debugError("Storage", "Error retrieving chat sessions", error);
     console.error("Error retrieving chat sessions:", error);
     return [];
   }
@@ -193,9 +237,13 @@ export function getChatSessions(): ChatSession[] {
 // Get a specific chat session by ID
 export function getChatSessionById(sessionId: string): ChatSession | null {
   try {
+    debugLog("Storage", "Retrieving chat session by ID", { sessionId });
     const sessions = getChatSessions();
-    return sessions.find(session => session.id === sessionId) || null;
+    const session = sessions.find(session => session.id === sessionId) || null;
+    debugLog("Storage", "Chat session retrieval result", { found: session !== null });
+    return session;
   } catch (error) {
+    debugError("Storage", "Error retrieving chat session", error);
     console.error("Error retrieving chat session:", error);
     return null;
   }
@@ -204,11 +252,17 @@ export function getChatSessionById(sessionId: string): ChatSession | null {
 // Delete a chat session
 export function deleteChatSession(sessionId: string): boolean {
   try {
+    debugLog("Storage", "Deleting chat session", { sessionId });
     const sessions = getChatSessions();
     const updatedSessions = sessions.filter(session => session.id !== sessionId);
     localStorage.setItem("chat_sessions", JSON.stringify(updatedSessions));
+    debugLog("Storage", "Chat session deleted successfully", { 
+      originalCount: sessions.length, 
+      newCount: updatedSessions.length
+    });
     return true;
   } catch (error) {
+    debugError("Storage", "Error deleting chat session", error);
     console.error("Error deleting chat session:", error);
     return false;
   }
@@ -216,12 +270,15 @@ export function deleteChatSession(sessionId: string): boolean {
 
 // Set the user's preferred model
 export function setPreferredModel(modelId: string): void {
+  debugLog("Storage", "Setting preferred model", { modelId });
   localStorage.setItem("preferred_model_id", modelId);
 }
 
 // Get the user's preferred model
 export function getPreferredModel(): string | null {
-  return localStorage.getItem("preferred_model_id");
+  const modelId = localStorage.getItem("preferred_model_id");
+  debugLog("Storage", "Retrieved preferred model", { modelId });
+  return modelId;
 }
 
 // Helper functions for provider information
