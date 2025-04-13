@@ -74,43 +74,26 @@ const ModelSelector = ({
     }
   }, [searchQuery, models]);
 
-  // Group models by provider
-  const groupedModels = useCallback(() => {
-    debugLog("ModelSelector", "Grouping models by provider");
+  // Filter and group models 
+  const filteredModels = useCallback(() => {
+    debugLog("ModelSelector", "Filtering models");
     
-    return Object.entries(
-      models.reduce<Record<string, AIModel[]>>((acc, model) => {
-        // Check if the model matches search query (case-insensitive)
-        const matchesSearch = searchQuery === "" || 
-          model.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-          (model.providerName || model.provider).toLowerCase().includes(searchQuery.toLowerCase());
-        
-        if (!matchesSearch) return acc;
-        
-        if (!acc[model.providerName || model.provider]) {
-          acc[model.providerName || model.provider] = [];
-        }
-        acc[model.providerName || model.provider].push(model);
-        return acc;
-      }, {})
-    );
+    return models.filter(model => {
+      const matchesSearch = searchQuery === "" || 
+        model.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesSearch;
+    });
   }, [models, searchQuery]);
 
-  const groupedModelsList = groupedModels();
+  const filteredModelsList = filteredModels();
   
   // Log the filtered models
-  useEffect(() => {
-    const totalModelsAfterFiltering = groupedModelsList.reduce(
-      (total, [_, models]) => total + models.length, 
-      0
-    );
-    
+  useEffect(() => {    
     debugLog("ModelSelector", "Models after filtering", { 
-      totalFiltered: totalModelsAfterFiltering,
-      providerGroups: groupedModelsList.length,
+      totalFiltered: filteredModelsList.length,
       query: searchQuery || "(empty)"
     });
-  }, [groupedModelsList, searchQuery]);
+  }, [filteredModelsList, searchQuery]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -127,7 +110,7 @@ const ModelSelector = ({
             className
           )}
           disabled={isLoading}
-          onClick={() => debugLog("ModelSelector", "Popover trigger clicked")}
+          onClick={() => { debugLog("ModelSelector", "Popover trigger clicked"); }}
         >
           {isLoading ? (
             <div className="flex items-center gap-2">
@@ -145,7 +128,7 @@ const ModelSelector = ({
               )}
               <div className="flex flex-col">
                 <span className="font-medium">{selectedModel.name}</span>
-                <span className="text-xs text-muted-foreground">{selectedModel.providerName}</span>
+                <span className="text-xs text-muted-foreground">{selectedModel.providerName || "Ollama"}</span>
               </div>
             </div>
           ) : (
@@ -169,49 +152,43 @@ const ModelSelector = ({
             <CommandEmpty>
               {searchQuery ? "No models found." : "No models available."}
             </CommandEmpty>
-            {groupedModelsList.map(([provider, providerModels]) => {
-              // Call debugLog here but don't use its return value in JSX
-              debugLog("ModelSelector", `Rendering provider group: ${provider}`, { 
-                modelCount: providerModels.length,
-                models: providerModels.map(m => m.name)
-              });
-              
-              return (
-                <CommandGroup heading={provider} key={provider}>
-                  {providerModels.map((model) => (
-                    <CommandItem
-                      key={model.id}
-                      value={model.id}
-                      onSelect={() => handleSelectModel(model.id)}
-                      className="flex items-start py-2 gap-2"
-                    >
-                      <div className="flex items-center gap-2 flex-1">
-                        {model.iconUrl && (
-                          <img 
-                            src={model.iconUrl} 
-                            alt={model.provider}
-                            className="w-5 h-5 object-contain opacity-80 mt-0.5"
-                          />
-                        )}
-                        <div className="flex flex-col">
-                          <span className="font-medium">{model.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {model.contextLength && `${Math.round(model.contextLength / 1000)}K ctx`}
-                            {model.pricing?.prompt && ` · ${model.pricing.prompt}`}
-                          </span>
-                        </div>
+            <CommandGroup heading="Available Models">
+              {filteredModelsList.map((model) => {
+                debugLog("ModelSelector", `Rendering model: ${model.name}`, { id: model.id });
+                
+                return (
+                  <CommandItem
+                    key={model.id}
+                    value={model.id}
+                    onSelect={() => handleSelectModel(model.id)}
+                    className="flex items-start py-2 gap-2"
+                  >
+                    <div className="flex items-center gap-2 flex-1">
+                      {model.iconUrl && (
+                        <img 
+                          src={model.iconUrl} 
+                          alt={model.provider}
+                          className="w-5 h-5 object-contain opacity-80 mt-0.5"
+                        />
+                      )}
+                      <div className="flex flex-col">
+                        <span className="font-medium">{model.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {model.contextLength && `${Math.round(model.contextLength / 1000)}K ctx`}
+                          {model.pricing?.prompt && ` · ${model.pricing.prompt}`}
+                        </span>
                       </div>
-                      <Check
-                        className={cn(
-                          "w-4 h-4 mt-1",
-                          selectedModelId === model.id ? "opacity-100" : "opacity-0"
-                        )}
-                      />
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              );
-            })}
+                    </div>
+                    <Check
+                      className={cn(
+                        "w-4 h-4 mt-1",
+                        selectedModelId === model.id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
           </CommandList>
         </Command>
       </PopoverContent>

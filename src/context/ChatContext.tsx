@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { 
   AIModel, 
@@ -12,19 +11,18 @@ import {
   deleteChatSession,
   getPreferredModel,
   setPreferredModel,
-  getApiKey,
-  setApiKey,
-  removeApiKey
+  getOllamaUrl,
+  setOllamaUrl,
+  DEFAULT_MODEL_ID
 } from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate, useParams } from "react-router-dom";
 
 interface ChatContextType {
-  // API Key
-  apiKey: string | null;
-  setUserApiKey: (key: string) => void;
-  removeUserApiKey: () => void;
-  hasApiKey: boolean;
+  // Ollama URL
+  ollamaUrl: string;
+  setUserOllamaUrl: (url: string) => void;
+  hasOllamaUrl: boolean;
   
   // Models
   availableModels: AIModel[];
@@ -45,18 +43,22 @@ interface ChatContextType {
   messages: Message[];
   isProcessing: boolean;
   sendMessage: (content: string) => Promise<void>;
+  
+  // For backward compatibility
+  apiKey: string | null;
+  setUserApiKey: (key: string) => void;
+  removeUserApiKey: () => void;
+  hasApiKey: boolean;
 }
 
 export const ChatContext = createContext<ChatContextType | null>(null);
-
-export const DEFAULT_MODEL_ID = "openai/gpt-3.5-turbo";
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId: string }>();
   
-  // API Key state
-  const [apiKey, setApiKey] = useState<string | null>(getApiKey());
+  // Ollama URL state
+  const [ollamaUrl, setOllamaUrl] = useState<string>(getOllamaUrl());
   
   // Models state
   const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
@@ -71,29 +73,33 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [messages, setMessages] = useState<Message[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   
-  // Set API key
-  const setUserApiKey = useCallback((key: string) => {
-    setApiKey(key);
-    toast.success("API key saved successfully");
+  // Set Ollama URL
+  const setUserOllamaUrl = useCallback((url: string) => {
+    setOllamaUrl(url);
+    toast.success("Ollama URL saved successfully");
     
-    // Refresh models immediately after setting the API key
+    // Refresh models immediately after setting the URL
     refreshModels();
   }, []);
-  
-  // Remove API key
-  const removeUserApiKey = useCallback(() => {
-    removeApiKey();
-    setApiKey(null);
-    setAvailableModels([]);
-    toast.info("API key removed");
-  }, []);
 
-  // Check if API key exists
-  const hasApiKey = Boolean(apiKey);
+  // Check if Ollama URL exists
+  const hasOllamaUrl = Boolean(ollamaUrl);
+  
+  // For backward compatibility
+  const apiKey = null;
+  const setUserApiKey = useCallback((key: string) => {
+    setUserOllamaUrl(key); // Redirect to Ollama URL setter
+  }, [setUserOllamaUrl]);
+  
+  const removeUserApiKey = useCallback(() => {
+    // Do nothing, kept for backward compatibility
+  }, []);
+  
+  const hasApiKey = hasOllamaUrl; // Map to Ollama URL for backward compatibility
 
   // Fetch available models
   const refreshModels = useCallback(async () => {
-    if (!hasApiKey) {
+    if (!hasOllamaUrl) {
       setIsLoadingModels(false);
       return;
     }
@@ -112,19 +118,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (preferredModel && models.some(model => model.id === preferredModel)) {
             setSelectedModelId(preferredModel);
           } else {
-            // Otherwise default to OpenAI model if available, or first model in the list
-            const openAiModel = models.find(model => model.id.includes("openai"));
-            setSelectedModelId(openAiModel?.id || models[0].id);
+            // Otherwise default to first model in the list
+            setSelectedModelId(models[0].id);
           }
         }
       }
     } catch (error) {
       console.error("Error refreshing models:", error);
-      toast.error("Failed to fetch available AI models");
+      toast.error("Failed to fetch available AI models from Ollama");
     } finally {
       setIsLoadingModels(false);
     }
-  }, [selectedModelId, hasApiKey]);
+  }, [selectedModelId, hasOllamaUrl]);
 
   // Select a different model
   const selectModel = useCallback((modelId: string) => {
@@ -208,8 +213,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Send a message to the selected AI model
   const sendMessage = useCallback(async (content: string) => {
-    if (!hasApiKey) {
-      toast.error("Please set your OpenRouter API key first");
+    if (!hasOllamaUrl) {
+      toast.error("Please set your Ollama server URL first");
       return;
     }
     
@@ -324,7 +329,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsProcessing(false);
     }
-  }, [messages, selectedModelId, currentSession, createNewSession, hasApiKey]);
+  }, [messages, selectedModelId, currentSession, createNewSession, hasOllamaUrl]);
 
   // Load sessions on initial mount
   useEffect(() => {
@@ -332,9 +337,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setChatSessions(allSessions);
   }, []);
 
-  // Fetch available models on initial mount and when API key changes
+  // Fetch available models on initial mount and when Ollama URL changes
   useEffect(() => {
-    if (hasApiKey) {
+    if (hasOllamaUrl) {
       refreshModels();
       
       // Set up periodic refresh (every 5 minutes)
@@ -344,7 +349,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       return () => clearInterval(refreshInterval);
     }
-  }, [refreshModels, hasApiKey]);
+  }, [refreshModels, hasOllamaUrl]);
 
   // Load session if sessionId is present in URL
   useEffect(() => {
@@ -354,10 +359,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [sessionId, loadSession]);
 
   const contextValue: ChatContextType = {
-    apiKey,
-    setUserApiKey,
-    removeUserApiKey,
-    hasApiKey,
+    ollamaUrl,
+    setUserOllamaUrl,
+    hasOllamaUrl,
     
     availableModels,
     selectedModelId,
@@ -375,6 +379,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     messages,
     isProcessing,
     sendMessage,
+    
+    // For backward compatibility
+    apiKey,
+    setUserApiKey,
+    removeUserApiKey,
+    hasApiKey,
   };
 
   return (

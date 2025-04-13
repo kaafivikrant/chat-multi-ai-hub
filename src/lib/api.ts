@@ -34,74 +34,76 @@ export interface ChatSession {
   updatedAt: number;
 }
 
-// API key management
+// API URL management
+export function getOllamaUrl(): string {
+  const url = localStorage.getItem("ollama_url") || "http://localhost:11434";
+  debugLog("API", "Retrieved Ollama URL from storage", { url });
+  return url;
+}
+
+export function setOllamaUrl(url: string): void {
+  debugLog("API", "Setting Ollama URL in storage", { url });
+  localStorage.setItem("ollama_url", url);
+}
+
+// For backward compatibility - these will be removed in future versions
 export function getApiKey(): string | null {
-  const apiKey = localStorage.getItem("openrouter_api_key");
-  debugLog("API", "Retrieved API key from storage", apiKey ? "API key exists" : "No API key found");
-  return apiKey;
+  return null;
 }
 
 export function setApiKey(apiKey: string): void {
-  debugLog("API", "Setting API key in storage", { keyLength: apiKey.length });
-  localStorage.setItem("openrouter_api_key", apiKey);
+  debugWarn("API", "Setting API key is deprecated. Using Ollama URL instead.");
 }
 
 export function removeApiKey(): void {
-  debugLog("API", "Removing API key from storage");
-  localStorage.removeItem("openrouter_api_key");
+  debugWarn("API", "Removing API key is deprecated. Using Ollama URL instead.");
 }
 
-// OpenRouter API interaction
-const OPENROUTER_API_URL = "https://openrouter.ai/api";
+// Ollama API interaction
+export const DEFAULT_MODEL_ID = "llama3";
 
-// Function to fetch available models from OpenRouter
+// Function to fetch available models from Ollama
 export async function fetchAvailableModels(): Promise<AIModel[]> {
-  const apiKey = getApiKey();
-  
-  if (!apiKey) {
-    debugWarn("API", "No API key found for OpenRouter");
-    return [];
-  }
+  const ollamaUrl = getOllamaUrl();
   
   try {
-    debugLog("API", "Fetching models from OpenRouter", { apiUrl: `${OPENROUTER_API_URL}/v1/models` });
+    debugLog("API", "Fetching models from Ollama", { apiUrl: `${ollamaUrl}/api/tags` });
     
-    const response = await fetch(`${OPENROUTER_API_URL}/v1/models`, {
+    const response = await fetch(`${ollamaUrl}/api/tags`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
     });
 
-    debugLog("API", "OpenRouter models response status", { status: response.status, ok: response.ok });
+    debugLog("API", "Ollama models response status", { status: response.status, ok: response.ok });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      debugError("API", "Failed to fetch models from OpenRouter", errorData);
-      throw new Error(`Failed to fetch models: ${errorData.error?.message || response.statusText}`);
+      const errorText = await response.text();
+      debugError("API", "Failed to fetch models from Ollama", errorText);
+      throw new Error(`Failed to fetch models: ${response.statusText}`);
     }
 
     const data = await response.json();
     debugLog("API", "Successfully fetched models data", { 
-      modelCount: data.data?.length || 0,
-      firstModel: data.data?.length > 0 ? data.data[0].id : null
+      modelCount: data.models?.length || 0,
+      firstModel: data.models?.length > 0 ? data.models[0].name : null
     });
     
     // Transform the response into our AIModel format
-    const transformedModels = data.data.map((model: any) => ({
-      id: model.id,
-      name: model.name.split("/").pop().replace(/-/g, " "),
-      description: model.description,
-      provider: model.id.split("/")[0],
-      providerName: getProviderName(model.id.split("/")[0]),
-      iconUrl: getProviderIcon(model.id.split("/")[0]),
-      contextLength: model.context_length,
+    const transformedModels = data.models?.map((model: any) => ({
+      id: model.name,
+      name: model.name,
+      description: `Ollama model: ${model.name}`,
+      provider: "ollama",
+      providerName: "Ollama",
+      iconUrl: getProviderIcon("ollama"),
+      contextLength: model.details?.context_length || 4096,
       pricing: {
-        prompt: `$${model.pricing?.prompt?.toFixed(6) || "0.000000"}/1K tokens`,
-        completion: `$${model.pricing?.completion?.toFixed(6) || "0.000000"}/1K tokens`
+        prompt: "Local",
+        completion: "Local"
       }
-    }));
+    })) || [];
 
     debugLog("API", "Transformed models data", { 
       modelCount: transformedModels.length,
@@ -110,28 +112,16 @@ export async function fetchAvailableModels(): Promise<AIModel[]> {
     
     return transformedModels;
   } catch (error) {
-    debugError("API", "Error fetching models from OpenRouter", error);
+    debugError("API", "Error fetching models from Ollama", error);
     console.error("Error fetching models:", error);
-    toast.error("Failed to fetch AI models. Please check your API key.");
+    toast.error("Failed to fetch AI models. Please check your Ollama server URL and make sure Ollama is running.");
     return [];
   }
 }
 
 // Function to send a message to the AI model
 export async function sendMessageToAI(modelId: string, messages: Message[]): Promise<Message> {
-  const apiKey = getApiKey();
-  
-  if (!apiKey) {
-    debugWarn("API", "No API key found when sending message to AI");
-    return {
-      id: `error_${Date.now()}`,
-      role: "assistant",
-      content: "No API key found. Please add your OpenRouter API key in the settings.",
-      modelId: modelId,
-      timestamp: Date.now(),
-      status: "error",
-    };
-  }
+  const ollamaUrl = getOllamaUrl();
   
   try {
     // Format messages for the API
@@ -143,42 +133,39 @@ export async function sendMessageToAI(modelId: string, messages: Message[]): Pro
     debugLog("API", "Sending message to AI", { 
       modelId, 
       messageCount: messages.length,
-      endpoint: `${OPENROUTER_API_URL}/v1/chat/completions`
+      endpoint: `${ollamaUrl}/api/chat`
     });
 
-    const response = await fetch(`${OPENROUTER_API_URL}/v1/chat/completions`, {
+    const response = await fetch(`${ollamaUrl}/api/chat`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": window.location.origin,
-        "X-Title": "Multi-AI Chat Hub",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: modelId,
         messages: formattedMessages,
+        stream: false
       }),
     });
 
     debugLog("API", "AI response status", { status: response.status, ok: response.ok });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      debugError("API", "AI response error", errorData);
-      throw new Error(`AI response error: ${errorData.error?.message || response.statusText}`);
+      const errorText = await response.text();
+      debugError("API", "AI response error", errorText);
+      throw new Error(`AI response error: ${response.statusText}`);
     }
 
     const data = await response.json();
     debugLog("API", "Received AI response", { 
-      responseId: data.id,
       model: data.model,
-      responseLength: data.choices?.[0]?.message?.content?.length || 0
+      responseLength: data.message?.content?.length || 0
     });
 
     return {
-      id: data.id || `msg_${Date.now()}`,
+      id: `msg_${Date.now()}`,
       role: "assistant",
-      content: data.choices[0].message.content,
+      content: data.message?.content || "No response content",
       modelId: modelId,
       timestamp: Date.now(),
       status: "complete",
@@ -190,7 +177,7 @@ export async function sendMessageToAI(modelId: string, messages: Message[]): Pro
     return {
       id: `error_${Date.now()}`,
       role: "assistant",
-      content: "I'm sorry, I encountered an error while processing your request. Please try again or select a different AI model.",
+      content: "I'm sorry, I encountered an error while processing your request. Please make sure your Ollama server is running and try again.",
       modelId: modelId,
       timestamp: Date.now(),
       status: "error",
@@ -281,31 +268,11 @@ export function getPreferredModel(): string | null {
   return modelId;
 }
 
-// Helper functions for provider information
-function getProviderName(providerId: string): string {
-  const providers: Record<string, string> = {
-    "openai": "OpenAI",
-    "anthropic": "Anthropic",
-    "meta": "Meta AI",
-    "google": "Google",
-    "mistral": "Mistral AI",
-    "cohere": "Cohere",
-    "perplexity": "Perplexity",
-    "groq": "Groq",
-  };
-  
-  return providers[providerId] || providerId;
-}
-
+// Helper function for provider information
 function getProviderIcon(providerId: string): string {
-  // Return placeholder URLs - in a real app, you'd use actual provider logos
-  const placeholders: Record<string, string> = {
-    "openai": "https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg",
-    "anthropic": "https://upload.wikimedia.org/wikipedia/commons/7/7f/Anthropic_logo.svg",
-    "google": "https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg",
-    "meta": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Meta_Platforms_Inc._logo.svg",
-    "mistral": "https://mistral.ai/images/logo-white.svg",
-  };
+  if (providerId === "ollama") {
+    return "https://ollama.com/public/ollama.png";
+  }
   
-  return placeholders[providerId] || `https://avatar.vercel.sh/${providerId}.svg`;
+  return `https://avatar.vercel.sh/${providerId}.svg`;
 }

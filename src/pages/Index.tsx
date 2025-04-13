@@ -12,9 +12,9 @@ import { debugLog } from "@/lib/debug";
 
 const Index = () => {
   const { 
-    apiKey,
-    setUserApiKey,
-    hasApiKey,
+    ollamaUrl,
+    setUserOllamaUrl,
+    hasOllamaUrl,
     availableModels, 
     selectedModelId, 
     isLoadingModels, 
@@ -32,13 +32,13 @@ const Index = () => {
   // Log component state
   useEffect(() => {
     debugLog("Index", "Component state", {
-      hasApiKey,
+      hasOllamaUrl,
       availableModelsCount: availableModels.length,
       selectedModelId,
       isLoadingModels,
       messagesCount: messages.length
     });
-  }, [hasApiKey, availableModels.length, selectedModelId, isLoadingModels, messages.length]);
+  }, [hasOllamaUrl, availableModels.length, selectedModelId, isLoadingModels, messages.length]);
 
   // Log the models we have available
   useEffect(() => {
@@ -48,10 +48,10 @@ const Index = () => {
         name: m.name,
         provider: m.providerName || m.provider
       })));
-    } else if (!isLoadingModels && hasApiKey) {
-      debugLog("Index", "No models available even though we have an API key");
+    } else if (!isLoadingModels && hasOllamaUrl) {
+      debugLog("Index", "No models available even though we have Ollama URL");
     }
-  }, [availableModels, isLoadingModels, hasApiKey]);
+  }, [availableModels, isLoadingModels, hasOllamaUrl]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -60,9 +60,9 @@ const Index = () => {
     }
   }, [messages]);
 
-  // If no API key is set, show the API key form
-  if (!hasApiKey) {
-    debugLog("Index", "Rendering API key form (no API key exists)");
+  // If no Ollama URL is set, show the URL form
+  if (!hasOllamaUrl) {
+    debugLog("Index", "Rendering Ollama URL form (no URL exists)");
     return (
       <div className="flex flex-col min-h-screen bg-gradient-to-br from-background to-accent/40">
         {/* Subtle background pattern */}
@@ -79,7 +79,7 @@ const Index = () => {
           <div className="max-w-4xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              <h1 className="font-medium text-lg">Multi-AI Chat Hub</h1>
+              <h1 className="font-medium text-lg">Ollama Chat Hub</h1>
             </div>
           </div>
         </header>
@@ -87,9 +87,9 @@ const Index = () => {
         <main className="flex-1 flex items-center justify-center p-4">
           <div className="w-full max-w-md">
             <ApiKeyForm 
-              onSaveApiKey={(key) => {
-                debugLog("Index", "API key saved", { keyLength: key.length });
-                setUserApiKey(key);
+              onSaveApiKey={(url) => {
+                debugLog("Index", "Ollama URL saved", { url });
+                setUserOllamaUrl(url);
               }}
               apiKeyExists={false}
             />
@@ -120,14 +120,14 @@ const Index = () => {
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            <h1 className="font-medium text-lg">Multi-AI Chat Hub</h1>
+            <h1 className="font-medium text-lg">Ollama Chat Hub</h1>
           </div>
           
           <div className="flex items-center gap-2">
             <ApiKeyForm 
-              onSaveApiKey={(key) => {
-                debugLog("Index", "API key updated", { keyLength: key.length });
-                setUserApiKey(key);
+              onSaveApiKey={(url) => {
+                debugLog("Index", "Ollama URL updated", { url });
+                setUserOllamaUrl(url);
               }}
               apiKeyExists={true}
             />
@@ -157,9 +157,9 @@ const Index = () => {
           {messages.length === 0 ? (
             <div className="h-[70vh] flex flex-col items-center justify-center text-center px-4">
               <GlassMorphicCard className="p-8 max-w-md w-full space-y-6 animate-fade-in">
-                <h2 className="text-2xl font-medium">Welcome to Multi-AI Chat Hub</h2>
+                <h2 className="text-2xl font-medium">Welcome to Ollama Chat Hub</h2>
                 <p className="text-muted-foreground">
-                  Select an AI model and start a conversation to experience different AI personalities and capabilities.
+                  Select an Ollama model and start a conversation to experience your locally running AI models.
                 </p>
                 
                 <div className="space-y-4 pt-2">
@@ -180,7 +180,7 @@ const Index = () => {
                   <Button 
                     onClick={() => {
                       debugLog("Index", "Starting conversation with default message");
-                      sendMessage("Hello! Tell me about what makes you unique as an AI model.");
+                      sendMessage("Hello! I'm running you locally with Ollama. What can you do?");
                     }}
                     className="w-full"
                     disabled={isLoadingModels || isProcessing}
